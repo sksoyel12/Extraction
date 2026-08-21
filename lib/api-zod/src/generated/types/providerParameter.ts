@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface HealthStatus {
-  status: string;
-}
+/**
+ * Override the default provider for this media category
+ */
+export type ProviderParameter = string;

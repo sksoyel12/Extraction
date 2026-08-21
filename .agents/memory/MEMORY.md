@@ -1,0 +1,1 @@
+- [OpenAPI generation](openapi-generation.md) — operation IDs can collide with Orval-generated parameter schemas; keep exported names distinct.

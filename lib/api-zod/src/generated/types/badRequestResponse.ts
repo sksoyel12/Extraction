@@ -5,7 +5,9 @@
  * Consumet-compatible media discovery API for anime, manga, movies, and TV shows.
  * OpenAPI spec version: 0.1.0
  */
+import type { Error } from './error';
 
-export interface HealthStatus {
-  status: string;
-}
+/**
+ * Invalid request
+ */
+export type BadRequestResponse = Error;

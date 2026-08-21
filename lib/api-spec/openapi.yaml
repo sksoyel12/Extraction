@@ -3,13 +3,15 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Consumet-compatible media discovery API for anime, manga, movies, and TV shows.
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: media
+    description: Search and retrieve media metadata, episodes, chapters, and playback sources
 paths:
   /healthz:
     get:
@@ -24,7 +26,146 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /catalog:
+    get:
+      operationId: getMediaCatalog
+      tags: [media]
+      summary: List supported media types and providers
+      responses:
+        "200":
+          description: Catalog
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Catalog"
+  /{media}/search/{query}:
+    get:
+      operationId: searchMediaCatalog
+      tags: [media]
+      summary: Search anime, manga, movies, or TV shows
+      parameters:
+        - $ref: "#/components/parameters/Media"
+        - $ref: "#/components/parameters/Query"
+        - $ref: "#/components/parameters/Provider"
+      responses:
+        "200":
+          description: Provider search response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProviderResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "502":
+          $ref: "#/components/responses/ProviderError"
+  /{media}/info/{id}:
+    get:
+      operationId: getMediaDetails
+      tags: [media]
+      summary: Get media details
+      parameters:
+        - $ref: "#/components/parameters/Media"
+        - $ref: "#/components/parameters/Id"
+        - $ref: "#/components/parameters/Provider"
+      responses:
+        "200":
+          description: Provider media details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProviderResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502":
+          $ref: "#/components/responses/ProviderError"
+  /{media}/episodes/{id}:
+    get:
+      operationId: getMediaEpisodesList
+      tags: [media]
+      summary: Get episodes or chapters for a media item
+      parameters:
+        - $ref: "#/components/parameters/Media"
+        - $ref: "#/components/parameters/Id"
+        - $ref: "#/components/parameters/Provider"
+      responses:
+        "200":
+          description: Provider episode or chapter response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProviderResponse"
+        "502":
+          $ref: "#/components/responses/ProviderError"
+  /{media}/stream/{id}:
+    get:
+      operationId: getMediaStreamSources
+      tags: [media]
+      summary: Get playable sources for an episode
+      parameters:
+        - $ref: "#/components/parameters/Media"
+        - $ref: "#/components/parameters/Id"
+        - $ref: "#/components/parameters/Provider"
+      responses:
+        "200":
+          description: Provider playback response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProviderResponse"
+        "502":
+          $ref: "#/components/responses/ProviderError"
 components:
+  parameters:
+    Media:
+      name: media
+      in: path
+      required: true
+      description: Media category
+      schema:
+        type: string
+        enum: [anime, manga, movie, tv]
+    Query:
+      name: query
+      in: path
+      required: true
+      description: Search term
+      schema:
+        type: string
+        minLength: 1
+    Id:
+      name: id
+      in: path
+      required: true
+      description: Provider media or episode identifier
+      schema:
+        type: string
+        minLength: 1
+    Provider:
+      name: provider
+      in: query
+      required: false
+      description: Override the default provider for this media category
+      schema:
+        type: string
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: Media was not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    ProviderError:
+      description: Upstream Consumet provider unavailable or returned an error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
   schemas:
     HealthStatus:
       type: object
@@ -33,4 +174,31 @@ components:
           type: string
       required:
         - status
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+    ProviderResponse:
+      description: JSON returned by the selected Consumet provider
+      type: object
+      additionalProperties: true
+    Catalog:
+      type: object
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        media:
+          type: array
+          items:
+            type: string
+            enum: [anime, manga, movie, tv]
+        providers:
+          type: object
+          additionalProperties:
+            type: string
+      required: [name, version, media, providers]
 
