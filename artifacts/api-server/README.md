@@ -18,6 +18,7 @@ The server is mounted below `/api`. The upstream can be changed with
 | Route | Purpose |
 | --- | --- |
 | `GET /api/catalog` | Supported categories, default providers, and route hints |
+| `GET /api/demo/source` | Legal CC0 MP4 source for testing a video player |
 | `GET /api/{media}/search/{query}` | Search anime, manga, movies, or TV |
 | `GET /api/{media}/info/{id}` | Metadata and seasons/episodes/chapters |
 | `GET /api/{media}/seasons/{id}` | Season-compatible alias for provider details |

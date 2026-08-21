@@ -86,6 +86,26 @@ router.get("/catalog", (_req, res) => {
   });
 });
 
+// Legal CC0 sample used to verify player integration without redistributing
+// copyrighted movies or shows.
+router.get("/demo/source", (_req, res) => {
+  res.json({
+    success: true,
+    mediaType: "demo",
+    title: "Flower sample video",
+    sources: [
+      {
+        url: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+        quality: "sample",
+        isM3U8: false,
+        type: "video/mp4",
+      },
+    ],
+    subtitles: [],
+    note: "CC0 sample source for testing a video player.",
+  });
+});
+
 for (const type of Object.keys(providers) as MediaType[]) {
   router.get(`/${type}/search/:query`, async (req: RequestWithLog, res) => {
     const rawProvider = typeof req.query.provider === "string" && req.query.provider.trim()
