@@ -195,7 +195,7 @@ components:
           type: array
           items:
             type: string
-            enum: [anime, manga, movie, tv]
+            enum: [anime, manga, movie, tv, music, books]
         providers:
           type: object
           additionalProperties:

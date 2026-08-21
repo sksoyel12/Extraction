@@ -1,7 +1,8 @@
 # Consumet Media API
 
 A small, production-minded proxy around the public Consumet provider API. It
-gives clients one stable API for anime, manga, movies, and TV shows.
+gives clients one stable API for anime, manga, movies, TV shows, music, and
+books.
 
 ## Quick start
 
@@ -25,10 +26,27 @@ The server is mounted below `/api`. The upstream can be changed with
 | `GET /api/{media}/servers/{id}` | Available streaming servers |
 | `GET /api/{media}/stream/{id}` | Playback sources for an episode |
 | `GET /api/{media}/watch/{id}` | Upstream-compatible playback alias |
+| `GET /api/movies/{provider}/{query}` | Movie search with the documented plural route |
+| `GET /api/movies/{provider}/info?id={id}` | Movie details |
+| `GET /api/movies/{provider}/watch?episodeId={id}` | Movie/TV playback sources |
+| `GET /api/movies/{provider}/download?episodeId={id}` | Download-style source alias |
+| `GET /api/music/{provider}/{query}` | Song, artist, or album search |
+| `GET /api/books/{provider}/{query}` | Book search |
 
 `media` is one of `anime`, `manga`, `movie`, or `tv`. Add
 `?provider=<provider>` to override the defaults (`gogoanime`, `mangadex`, and
 `flixhq`).
+
+Pass `?unified=true` to any search, details, or playback route to receive:
+
+```json
+{
+  "success": true,
+  "mediaType": "movie",
+  "provider": "flixhq",
+  "data": {}
+}
+```
 
 For clients already using the upstream Consumet URL shape, these also work:
 

@@ -8,6 +8,8 @@ const providers = {
   manga: "mangadex",
   movie: "flixhq",
   tv: "flixhq",
+  music: "spotify",
+  books: "google-books",
 } as const;
 
 type MediaType = keyof typeof providers;
@@ -32,10 +34,19 @@ function providerFor(type: MediaType, value: unknown) {
   return encodeURIComponent(provider);
 }
 
-async function proxy(req: RequestWithLog, res: Response, path: string) {
+function unifiedResponse(mediaType: string, provider: string, data: unknown) {
+  return {
+    success: true,
+    mediaType,
+    provider,
+    data,
+  };
+}
+
+async function proxy(req: RequestWithLog, res: Response, path: string, meta?: { mediaType: string; provider: string }) {
   try {
     const data = await consume(path);
-    res.json(data);
+    res.json(req.query.unified === "true" && meta ? unifiedResponse(meta.mediaType, meta.provider, data) : data);
   } catch (error) {
     const status = error instanceof ConsumetError ? error.statusCode : 400;
     if (status >= 500) req.log?.warn({ err: error, path }, "Media provider request failed");
@@ -49,7 +60,10 @@ function mediaRoute(type: MediaType, suffix: string, idName: string) {
     try {
       const id = encodeURIComponent(clean(param(req, idName), idName));
       const provider = providerFor(type, req.query.provider);
-      await proxy(req, res, `/${type}/${provider}${suffix.replace(":id", id)}`);
+      await proxy(req, res, `/${type}/${provider}${suffix.replace(":id", id)}`, {
+        mediaType: type,
+        provider: decodeURIComponent(provider),
+      });
     } catch (error) {
       const status = (error as Error & { statusCode?: number }).statusCode ?? 400;
       res.status(status).json({ error: error instanceof Error ? error.message : "Invalid request" });
@@ -61,7 +75,7 @@ router.get("/catalog", (_req, res) => {
   res.json({
     name: "Consumet Media API",
     version: "1.0.0",
-    media: ["anime", "manga", "movie", "tv"],
+    media: ["anime", "manga", "movie", "tv", "music", "books"],
     providers,
     endpoints: {
       search: "GET /api/{media}/search/:query",
@@ -74,8 +88,11 @@ router.get("/catalog", (_req, res) => {
 
 for (const type of Object.keys(providers) as MediaType[]) {
   router.get(`/${type}/search/:query`, async (req: RequestWithLog, res) => {
-    const provider = providerFor(type, req.query.provider);
-    await proxy(req, res, `/${type}/${provider}/${encodeURIComponent(clean(req.params.query, "query"))}`);
+    const rawProvider = typeof req.query.provider === "string" && req.query.provider.trim()
+      ? req.query.provider.trim()
+      : providers[type];
+    const provider = encodeURIComponent(rawProvider);
+    await proxy(req, res, `/${type}/${provider}/${encodeURIComponent(clean(req.params.query, "query"))}`, { mediaType: type, provider: rawProvider });
   });
 
   router.get(`/${type}/info/:id`, mediaRoute(type, "/info/:id", "id"));
@@ -88,6 +105,48 @@ for (const type of Object.keys(providers) as MediaType[]) {
   router.get(`/${type}/servers/:id`, mediaRoute(type, "/servers/:id", "id"));
 }
 
+// Friendly plural routes matching the documented Movies/TV API shape.
+for (const type of ["movie", "tv"] as const) {
+  const plural = type === "movie" ? "movies" : "tv";
+  router.get(`/${plural}/:provider/:query`, async (req: RequestWithLog, res) => {
+    const provider = encodeURIComponent(clean(param(req, "provider"), "provider"));
+    const query = encodeURIComponent(clean(param(req, "query"), "query"));
+    await proxy(req, res, `/${type}/${provider}/${query}`, { mediaType: type, provider: param(req, "provider") });
+  });
+
+  router.get(`/${plural}/:provider/info`, async (req: RequestWithLog, res) => {
+    const provider = encodeURIComponent(clean(param(req, "provider"), "provider"));
+    const id = encodeURIComponent(clean(req.query.id, "id"));
+    await proxy(req, res, `/${type}/${provider}/info/${id}`, { mediaType: type, provider: param(req, "provider") });
+  });
+
+  router.get(`/${plural}/:provider/watch`, async (req: RequestWithLog, res) => {
+    const provider = encodeURIComponent(clean(param(req, "provider"), "provider"));
+    const episodeId = encodeURIComponent(clean(req.query.episodeId ?? req.query.id, "episodeId"));
+    await proxy(req, res, `/${type}/${provider}/watch/${episodeId}`, { mediaType: type, provider: param(req, "provider") });
+  });
+
+  router.get(`/${plural}/:provider/download`, async (req: RequestWithLog, res) => {
+    const provider = encodeURIComponent(clean(param(req, "provider"), "provider"));
+    const episodeId = encodeURIComponent(clean(req.query.episodeId ?? req.query.id, "episodeId"));
+    await proxy(req, res, `/${type}/${provider}/watch/${episodeId}`, { mediaType: type, provider: param(req, "provider") });
+  });
+}
+
+for (const type of ["music", "books"] as const) {
+  router.get(`/${type}/:provider/:query`, async (req: RequestWithLog, res) => {
+    const provider = encodeURIComponent(clean(param(req, "provider"), "provider"));
+    const query = encodeURIComponent(clean(param(req, "query"), "query"));
+    await proxy(req, res, `/${type}/${provider}/${query}`, { mediaType: type, provider: param(req, "provider") });
+  });
+
+  router.get(`/${type}/:provider/info`, async (req: RequestWithLog, res) => {
+    const provider = encodeURIComponent(clean(param(req, "provider"), "provider"));
+    const id = encodeURIComponent(clean(req.query.id, "id"));
+    await proxy(req, res, `/${type}/${provider}/info/${id}`, { mediaType: type, provider: param(req, "provider") });
+  });
+}
+
 // Compatibility routes matching the upstream Consumet URL shape:
 // /api/anime/gogoanime/searchTerm, /api/anime/gogoanime/info/id, etc.
 router.get("/:type/:provider/:query", async (req: RequestWithLog, res) => {
@@ -96,7 +155,10 @@ router.get("/:type/:provider/:query", async (req: RequestWithLog, res) => {
     res.status(404).json({ error: "Unknown media type" });
     return;
   }
-  await proxy(req, res, `/${type}/${encodeURIComponent(param(req, "provider"))}/${encodeURIComponent(param(req, "query"))}`);
+  await proxy(req, res, `/${type}/${encodeURIComponent(param(req, "provider"))}/${encodeURIComponent(param(req, "query"))}`, {
+    mediaType: type,
+    provider: param(req, "provider"),
+  });
 });
 
 router.get("/:type/:provider/info/:id", async (req: RequestWithLog, res) => {
@@ -105,7 +167,10 @@ router.get("/:type/:provider/info/:id", async (req: RequestWithLog, res) => {
     res.status(404).json({ error: "Unknown media type" });
     return;
   }
-  await proxy(req, res, `/${type}/${encodeURIComponent(param(req, "provider"))}/info/${encodeURIComponent(param(req, "id"))}`);
+  await proxy(req, res, `/${type}/${encodeURIComponent(param(req, "provider"))}/info/${encodeURIComponent(param(req, "id"))}`, {
+    mediaType: type,
+    provider: param(req, "provider"),
+  });
 });
 
 router.get("/:type/:provider/watch/:id", async (req: RequestWithLog, res) => {
@@ -114,7 +179,10 @@ router.get("/:type/:provider/watch/:id", async (req: RequestWithLog, res) => {
     res.status(404).json({ error: "Unknown media type" });
     return;
   }
-  await proxy(req, res, `/${type}/${encodeURIComponent(param(req, "provider"))}/watch/${encodeURIComponent(param(req, "id"))}`);
+  await proxy(req, res, `/${type}/${encodeURIComponent(param(req, "provider"))}/watch/${encodeURIComponent(param(req, "id"))}`, {
+    mediaType: type,
+    provider: param(req, "provider"),
+  });
 });
 
 export default router;
